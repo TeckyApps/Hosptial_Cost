@@ -1,0 +1,245 @@
+﻿@using Kendo.Mvc.UI;
+@using Hospital_Costs.Models;
+@{
+    ViewBag.Title = "Index";
+}
+
+<script type="text/javascript">
+    // function that gets the state value from the dropdown
+    function getState() {
+        // debugger;
+        return $('#drpState').val();
+    }
+    function getNumberOfResults() {
+        return $('#drpNumberOfResults').val();
+    }
+    function getQuerySelection() {
+        return $('#drpQuerySelection').val();
+    }
+    function additionalInfo() {
+        return {
+            state: getState()
+        }
+    }
+    function searchGrid() {
+        var value = getState();
+        $.ajax(
+            {
+                type: 'POST',
+                url: '/Index/Charges_Read/',
+                dataType: 'json',
+                data: {
+                    state: getState(),
+                    numberOfResults: getNumberOfResults()
+                },
+                success: function (data) {
+                    var results = data.Data;
+                    var dataSource = new kendo.data.DataSource({
+                        data: results
+                    });
+                    var grid = $('#grid').data('kendoGrid');
+                    grid.setDataSource(dataSource);
+                    getLowestValue();
+                    getHighestValue();
+                    loadPieChart();
+                }
+            });
+    }
+    function loadPieChart() {
+        var grid = $('#chartDiagnosis').data('kendoChart');
+        grid.dataSource.read();
+    }
+    function getLowestValue() {
+        // debugger;
+        $.ajax({
+            url: '@Url.Action("Charges_ReadLowest", "Index")',
+            dataType: "json",
+            type: "GET",
+            contentType: 'application/json; charset=utf-8',
+            cache: false,
+            data: {
+                state: getState()
+            },
+            success: function (data) {
+                $('#txtLowest').html(data);
+            },
+            error: function (er) {
+                alert('error');
+            }
+        });
+    }
+
+    function getHighestValue() {
+        // debugger;
+        $.ajax({
+            url: '@Url.Action("Charges_ReadHighest", "Index")',
+            dataType: "json",
+            type: "GET",
+            contentType: 'application/json; charset=utf-8',
+            cache: false,
+            data: {
+                state: getState()
+            },
+            success: function (data) {
+                $('#txtHighest').html(data);
+            },
+            error: function (er) {
+                alert('error');
+            }
+        });
+    }
+</script>
+<style>
+    #grid .k-grid-toolbar {
+        padding: .6em 1.3em .6em .4em;
+    }
+
+    .category-label {
+        vertical-align: middle;
+        padding-right: .5em;
+    }
+
+    #category {
+        vertical-align: middle;
+    }
+
+    .refreshBtnContainer {
+        display: inline-block;
+    }
+
+    .toolbar {
+        float: right;
+    }
+    td {
+        padding:10px;
+    }
+</style>
+<div class="container-fluid placeholders">
+    <div class="row">
+        <div class="col-xs-4 col-md-4 placeholder"></div>
+        <div class="col-xs-10 col-md-4">
+            <h2 style="text-align:center">Grid Options</h2>
+            <table class="table-bordered">
+                <tr>
+                    <td>Select State:</td>
+                    <td>@(Html.Kendo().DropDownList()
+                        .Name("drpState")
+                        .DataTextField("State_Name")
+                        .DataValueField("State_Abbreviation")
+                        .DataSource(source =>
+                        {
+                            source.Custom()
+                            .Type("aspnetmvc-ajax")
+                            .Transport(transport =>
+                            {
+                                transport.Read("States_Read", "Index");
+                            })
+                            .Schema(schema =>
+                            {
+                                schema.Data("Data")
+                                .Total("Total");
+                            });
+                        }))
+                    </td>
+                    <td>Select Number Of Results:</td>
+                    <td>@(Html.Kendo().DropDownList()
+                        .Name("drpNumberOfResults")
+                        .DataTextField("Text")
+                        .DataValueField("Value")
+                        .BindTo(new List<SelectListItem>() {
+                            new SelectListItem() {
+                                Text = "1",
+                                Value = "1"
+                            },
+                            new SelectListItem() {
+                                Text = "10",
+                                Value = "10"
+                            },
+                            new SelectListItem() {
+                                Text = "20",
+                                Value = "20"
+                            }
+                        })
+                        .Value("1")
+                        .HtmlAttributes(new { style = "width: 100%" }))
+                    </td>
+                    <td>
+                        @(Html.Kendo()
+                        .Button()
+                        .Name("btnSubmit")
+                        .Content("Search")
+                        .HtmlAttributes(new { @class = "textButton" })
+                        .Events(ev => ev.Click("searchGrid")))
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div class="col-xs-4 col-md-4 placeholder"></div>
+    </div>
+    <div class="row">
+        <div class="col-xs-4 col-md-1 placeholder"></div>
+        <div class="col-xs-10 col-md-7">
+            @(Html.Kendo().Chart<Hospital_Costs.Classes.Diagnosis>()
+            .Name("chartDiagnosis")
+            .Title("Top Ten Diagnosed Categories")
+            .AutoBind(false)
+            .Legend(legend => legend
+            .Visible(false)
+            .Position(ChartLegendPosition.Top))
+            .DataSource(ds =>
+            {
+                ds.Read(read => read.Action("Read_DiagnosisTotal", "Index").Data("additionalInfo"));
+            })
+            .Series(series =>
+            {
+                series.Pie(model => model.Total, model => model.DRG_Definition, model => model.current_color.Color_Code)
+                .Labels(labels => labels
+                .Visible(true)
+                .Template("#= category # - #= kendo.format('{0:p}', percentage)#")
+                );
+            })
+            .Tooltip(tooltip => tooltip
+            .Visible(true)
+            .Template("#= category # - #= kendo.format('{0:p}', percentage)#")))
+        </div>
+        <div class="col-xs-10 col-md-3" style="margin-top:5%">
+            <h3 style="text-align:center">Highest/Lowest Charging Hospitals</h3>
+            <table style="width:100%;table-layout:fixed;">
+                <tr><th>Lowest Charging Hospital</th></tr>
+                <tr><td id="txtLowest" width="100%"></td></tr>
+                <tr><th>Highest Charging Hospital</th></tr>
+                <tr><td id="txtHighest" width="100%"></td></tr>
+            </table>
+        </div>
+        <div class="col-xs-4 col-md-1 placeholder"></div>
+    </div>
+    <div class="row">
+        <div class="col-md-1"></div>
+        <div class="col-md-10">
+            <div class="k-grid k-widget k-display-block">
+                @(Html.Kendo().Grid<IndexViewModel>()
+                .Name("grid")
+                .Columns(columns =>
+                {
+                    columns.Bound(c => c.Id).Hidden(true);
+                    columns.Bound(c => c.Name).Title("Hospital Name");
+                    columns.Bound(c => c.RegionDescription).Title("Region");
+                    columns.Bound(c => c.DRG_Definition).Title("DRG Definition");
+                    columns.Bound(c => c.Total_Cost).Title("Cost");
+                })
+                .HtmlAttributes(new { style = "height: 550px;" })
+                .Pageable()
+                .Sortable()
+                .Scrollable()
+                .Pageable(pageable => pageable
+                .Refresh(true)
+                .PageSizes(true)
+                .ButtonCount(5))
+                .DataSource(dataSource => dataSource
+                    .Ajax()
+                    .PageSize(20)))
+            </div>
+        </div>
+        <div class="col-md-1"></div>
+    </div>
+</div>
